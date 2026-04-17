@@ -53,13 +53,19 @@ function arrowHtml(collapsed: boolean): string {
 
 function sectionHeader(count: number): string {
   const chevron = arrowHtml(state.sectionCollapsed);
+  /* Matches native view-head (views.cljs:1955-2003): .ls-view-head wrapper
+   * with a `text-sm px-0 py-0 h-6` title (shui/button) rather than an <h2>.
+   * That smaller header vertically centers the chevron the same way native
+   * Linked References does. */
   return `
     <div class="ls-foldable-title content">
       <div class="flex-1 flex-row foldable-title">
         <div class="flex flex-row items-center ls-foldable-header gap-1">
           <a class="ls-foldable-title-control block-control opacity-50 hover:opacity-100" style="${CTRL_STYLE}" data-resurface-role="section-toggle">${chevron}</a>
-          <div class="flex flex-row flex-1 justify-between items-center">
-            <h2 class="font-medium">${count} Resurfaced</h2>
+          <div class="ls-view-head flex flex-1 flex-nowrap items-center justify-between gap-1 overflow-hidden">
+            <div class="flex flex-row items-center gap-2">
+              <span class="text-sm px-0 py-0 h-6 font-medium inline-flex items-center">${count} Resurfaced</span>
+            </div>
           </div>
         </div>
       </div>
