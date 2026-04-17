@@ -1,7 +1,7 @@
 import "@logseq/libs";
 import { diagnoseSchema } from "./query";
 import { selectResurfaced, type Resurfaced } from "./selection";
-import { renderResurfaced } from "./render";
+import { renderResurfaced, collectBlockRefUuids } from "./render";
 import {
   injectResurfaced,
   removeExisting,
@@ -15,6 +15,7 @@ let renderInFlight = false;
 let renderQueued = false;
 let lastRenderedTitle: string | null = null;
 let lastPicks: Resurfaced[] = [];
+let lastRefs: Map<string, string> = new Map();
 
 function readJournalTitleFromDom(): string | null {
   const doc = (window as any).top?.document ?? document;
@@ -66,8 +67,33 @@ function persistState(): void {
 }
 
 function reinject(): void {
-  const { html } = renderResurfaced(lastPicks);
+  const { html } = renderResurfaced(lastPicks, lastRefs);
   injectResurfaced(html, handleAction);
+}
+
+async function fetchBlockRefs(picks: Resurfaced[]): Promise<Map<string, string>> {
+  const uuids = new Set<string>();
+  for (const p of picks) {
+    if (p.block.tree) {
+      for (const u of collectBlockRefUuids(p.block.tree)) uuids.add(u);
+    }
+  }
+  const refs = new Map<string, string>();
+  await Promise.all(
+    [...uuids].map(async (uuid) => {
+      try {
+        const b: any = await (logseq as any).Editor.getBlock(uuid);
+        if (!b) return;
+        const raw = (b.title ?? b.content ?? "").toString();
+        const firstLine = raw.split("\n")[0].trim();
+        if (firstLine) refs.set(uuid, firstLine);
+      } catch {
+        /* getBlock can throw on orphan refs — leave unresolved, we fall
+         * back to the dim `↪ block` placeholder. */
+      }
+    }),
+  );
+  return refs;
 }
 
 function handleAction(action: ClickAction): void {
@@ -119,6 +145,7 @@ async function run(): Promise<void> {
     if (!isJournalPage()) {
       lastRenderedTitle = null;
       lastPicks = [];
+      lastRefs = new Map();
       removeExisting();
       return;
     }
@@ -140,8 +167,9 @@ async function run(): Promise<void> {
 
     state.collapsedCards.clear();
     lastPicks = picks;
+    lastRefs = await fetchBlockRefs(picks);
 
-    const { html } = renderResurfaced(picks);
+    const { html } = renderResurfaced(picks, lastRefs);
     const injected = injectResurfaced(html, handleAction);
 
     if (injected) {

@@ -8,28 +8,41 @@ We could embed an `<iframe>` with a Logseq block slot macro, but that loses them
 
 So `src/mdParser.ts` does the minimum viable inline rendering — the subset that actually appears in typical bullet blocks. The output uses Logseq's own class names (`page-reference`, `page-ref`, `bracket`, `tag`, `external-link`) so the user's theme styles everything automatically.
 
-## Pipeline (`renderBlockContent`, `src/mdParser.ts:70`)
+## Pipeline (`renderBlockContent(raw, refs?)`)
 
 ```
 raw input
-    ↓ stripPreamble        src/mdParser.ts:17   (drop property lines id::, strip leading TODO/NOW)
-    ↓ escapeHtml                                  (one-shot escape)
-    ↓ tokenize backticks    src/mdParser.ts:77   (replace with \0CODE{n}\0 sentinels)
-    ↓ wikilinkReplace       src/mdParser.ts:24   ([[Page]] → <span.page-reference>…)
-    ↓ tagReplace            src/mdParser.ts:38   (#[[Multi Word]] first, then #simple)
-    ↓ emphasisReplace       src/mdParser.ts:49   (** ** → <b>, * * → <i>, == == → <mark>)
-    ↓ markdownLinkReplace   src/mdParser.ts:56   ([text](url) → <a.external-link>)
-    ↓ blockRefReplace       src/mdParser.ts:63   (((uuid)) → placeholder pill)
-    ↓ detokenize backticks  src/mdParser.ts:88
-    ↓ \n → <br>             src/mdParser.ts:92
+    ↓ stripPreamble                     (drop property lines id::, strip leading TODO/NOW)
+    ↓ unwrapHybridLinks                 ([[label](url)] → [label](url) — vault hybrid shape)
+    ↓ escapeHtml                        (one-shot escape)
+    ↓ tokenize backticks                (replace with \0PH{n}\0 sentinels → <code>)
+    ↓ tokenize images                   (![alt](url) → <img>)
+    ↓ tokenize external links           ([text](url) → <a.external-link>)
+    ↓ tokenize #[[Multi Word]]          (before tag-replace to avoid #[… matching)
+    ↓ wikilinkReplace                   ([[Page]] → <span.page-reference>…)
+    ↓ tagReplace                        (#simple → <a.tag>)
+    ↓ emphasisReplace                   (** → <b>, ~~ → <del>, __ → <ins>, * → <i>, == → <mark>)
+    ↓ blockRefReplace(refs)             (((uuid)) → hydrated <a.block-ref> if refs has uuid,
+                                          else dim ↪ block placeholder)
+    ↓ detokenize sentinels
+    ↓ \n → <br>
 ```
+
+The `refs?: Map<string,string>` parameter is threaded from `src/main.ts`
+through `src/render.ts`. It maps block-ref uuids to their target block's
+first-line content, pre-fetched via `Editor.getBlock(uuid)` before the render
+pass. Synchronous consumption — no promises inside the inline pipeline.
 
 ## Order matters
 
 1. **escapeHtml first.** All subsequent regexes operate on an already-escaped string, so we can emit raw tag markup in replacements without double-escaping content.
-2. **Code tokenization before emphasis/links.** If we ran `** **` or `[text](url)` first, an asterisk or bracket inside a code span would get eaten. Backticks become `\u0000CODE0\u0000`-style sentinels, then re-expand at the end into `<code>…</code>` wrappers.
-3. **`#[[Multi Word]]` before `#simple`.** If `#simple` ran first, it would match `#[` and leave broken output. The multi-word branch (`src/mdParser.ts:39`) consumes the whole `#[[…]]` form before the simple branch runs.
-4. **Bold (`**`) before italic (`*`).** Italic's negative lookbehind `[^*\w]` plus negative lookahead `(?!\*)` avoids matching inside a bold pair, but the order is still load-bearing because bold is non-greedy and the string is already simpler after it runs.
+2. **Hybrid link unwrap before escaping.** `[[label](url)]` is reduced to `[label](url)` up front so the link regex anchors cleanly and no stray `[` leaks in front of the `<a>`.
+3. **Code tokenization before emphasis/links.** If we ran `** **` or `[text](url)` first, an asterisk or bracket inside a code span would get eaten. Backticks become `\u0000PH{n}\u0000` sentinels, then re-expand at the end.
+4. **Images before external links.** `![alt](url)` shares the `](url)` tail with the link rule — image has to win first or the `!` leaks out in front of an `<a>`.
+5. **`#[[Multi Word]]` before `#simple`.** If `#simple` ran first, it would match `#[` and leave broken output. The multi-word branch consumes the whole `#[[…]]` form before the simple branch runs.
+6. **Bold (`**`) before italic (`*`).** Italic's negative lookbehind `[^*\w]` plus negative lookahead `(?!\*)` avoids matching inside a bold pair, but the order is still load-bearing because bold is non-greedy and the string is already simpler after it runs.
+7. **Strikethrough (`~~`) and underline (`__`) run inside `emphasisReplace`** — same pass as bold / italic / highlight, mirroring Logseq's `emphasis-cp` (`/tmp/logseq/src/main/frontend/components/block.cljs:1633`). Underline uses `(^|[^_\w])…(?!_)` guards so it doesn't collide with in-identifier underscores.
+8. **blockRefReplace is last** so the uuid string isn't eaten by any prior regex.
 
 ## Class names mirrored from Logseq
 
@@ -43,10 +56,10 @@ Matching these classes is what makes the cards look like native Linked Reference
 
 ## Known edge cases / intentional gaps
 
-- **Block refs `((uuid))`** render as a dim `↪ block` placeholder (`src/mdParser.ts:64`). Resolving them would require a DB lookup per ref per card per render — worth doing in v2 but not essential.
-- **Nested wikilinks** inside alias links (e.g. `[[Foo] [label](url)]`) are not unwrapped; we only handle flat `[[Page]]`.
+- **Block refs `((uuid))`** are hydrated before render — `src/main.ts` walks the pick tree via `collectBlockRefUuids`, fetches each target with `Editor.getBlock(uuid)`, and passes the resulting `Map<uuid, firstLine>` into the render pipeline. Hydrated refs render as `<a class="block-ref" data-resurface-block-ref="uuid">{firstLine}</a>`; clicking one navigates to the source page via `Editor.scrollToBlockInPage`. Refs that can't be resolved (deleted target, permissioning errors) fall back to the dim `↪ block` placeholder.
+- **Nested wikilinks** inside alias links (e.g. `[[Foo] [label](url)]`) are not unwrapped; we only handle flat `[[Page]]`. The `[[label](url)]` hybrid form *is* handled by `unwrapHybridLinks`.
 - **Embeds (`{{embed ((uuid))}}`, `{{query …}}`)** are passed through as escaped text. Embeds in a timeline card would be visually noisy anyway.
-- **Image markdown (`![alt](url)`)** is not special-cased; it falls through `markdownLinkReplace` and renders as a text link.
+- **Images** (`![alt](url)`) render as `<img loading="lazy">`.
 - **Properties attached to child blocks** are not visible because we only render the top-level block content, not its children. Logseq stores properties as separate child blocks in DB graphs and as `id::` lines in file graphs — both are filtered by `stripPreamble` / `isGunk`.
 - **Multi-paragraph blocks** render with `<br>` separators. No paragraph wrapping.
 

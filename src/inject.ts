@@ -71,6 +71,14 @@ function resolveAction(target: HTMLElement): ClickAction | null {
     if (uuid) return { type: "card-toggle", uuid };
   }
 
+  const blockRef = target.closest(
+    "a.block-ref[data-resurface-block-ref]",
+  ) as HTMLElement | null;
+  if (blockRef && blockRef.closest("#resurfaced-refs")) {
+    const uuid = blockRef.dataset.resurfaceBlockRef ?? "";
+    if (uuid) return { type: "block-nav", uuid };
+  }
+
   const pageRef = target.closest("a.page-ref") as HTMLElement | null;
   if (pageRef && pageRef.closest("#resurfaced-refs")) {
     const name =
