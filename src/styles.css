@@ -1,0 +1,73 @@
+.resurfaced-refs .resurfaced-rung {
+  font-size: 0.72rem;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  user-select: none;
+  white-space: nowrap;
+  margin-left: 0.5rem;
+}
+
+.resurfaced-refs .block-ref-placeholder {
+  opacity: 0.5;
+  font-style: italic;
+  cursor: default;
+}
+
+.resurfaced-refs .ls-block > .block-main-container > .block-control-wrap > .block-control {
+  visibility: hidden;
+}
+
+.resurfaced-refs .block-content-wrapper {
+  min-width: 0;
+}
+
+.resurfaced-refs .block-body .is-paragraph + .is-paragraph {
+  margin-top: 0.375rem;
+}
+
+.resurfaced-refs .ls-block {
+  padding: 0;
+  margin: 0;
+}
+
+.resurfaced-refs .ls-block > .block-main-container {
+  min-height: 1.5rem;
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+.resurfaced-refs .block-children-container {
+  margin: 0;
+  padding: 0;
+}
+
+.resurfaced-refs .block-children {
+  padding: 0;
+}
+
+.resurfaced-refs .block-children > .ls-block {
+  margin-top: 0;
+}
+
+.resurfaced-refs .block-children-left-border {
+  flex-shrink: 0;
+}
+
+.resurfaced-refs .block-content.inline {
+  padding: 0;
+}
+
+.resurfaced-refs .block-content-inner {
+  padding: 0;
+  margin: 0;
+}
+
+.resurfaced-refs [data-resurface-uuid] {
+  cursor: pointer;
+}
+
+.resurfaced-refs .references-blocks-item .block-content.inline:hover {
+  background: var(--ls-tertiary-background-color, rgba(255, 255, 255, 0.04));
+  border-radius: 4px;
+}

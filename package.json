@@ -1,0 +1,28 @@
+{
+  "name": "resurface",
+  "version": "0.1.0",
+  "description": "A Logseq plugin that resurfaces bullet blocks you wrote around this time in past cycles (1d, 3d, 1w, 2w, 1mo, 2mo, 6mo, 1y, 2y, 5y, 10y).",
+  "author": "kendreaditya",
+  "license": "MIT",
+  "main": "dist/index.html",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kendreaditya/resurface.git"
+  },
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@logseq/libs": "^0.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0"
+  },
+  "logseq": {
+    "id": "resurface",
+    "title": "Resurface",
+    "icon": "./icon.svg"
+  }
+}
