@@ -5,11 +5,12 @@ import { state } from "./state";
 
 const CHEVRON_SVG = `<svg aria-hidden="true" version="1.1" viewBox="0 0 192 512" fill="currentColor" display="inline-block" class="h-4 w-4" style="margin-left: 2px;"><path d="M0 384.662V127.338c0-17.818 21.543-26.741 34.142-14.142l128.662 128.662c7.81 7.81 7.81 20.474 0 28.284L34.142 398.804C21.543 411.404 0 402.48 0 384.662z" fill-rule="evenodd"></path></svg>`;
 
-/* Width/height match native ui.cljs `foldable-title` (`:style {:width 14 :height 16}`).
- * Left offset comes from the `.ls-foldable-title-control` class (`margin-left: -27px`),
- * and inside `.references-blocks-wrap .foldable-title .block-control` the theme adds
- * `right: -5px; top: 1px` — identical to native placement. */
-const CTRL_STYLE = "width: 14px; height: 16px;";
+/* Inline style matches stable Logseq 0.10.x `foldable-title`
+ * (ui.cljs: `{:style {:width 14 :height 16 :margin-left -30}}`). The
+ * -30px margin-left pulls the chevron into the "gutter" to the left of
+ * the header content — this is how native Linked References positions
+ * its section chevron. */
+const CTRL_STYLE = "width: 14px; height: 16px; margin-left: -30px;";
 
 function escapeHtml(s: string): string {
   return s
@@ -48,24 +49,30 @@ function formatJournalDay(jd: number): string {
 
 function arrowHtml(collapsed: boolean): string {
   const cls = collapsed ? "rotating-arrow collapsed" : "rotating-arrow not-collapsed";
-  return `<span class="control-hide"><span class="${cls}">${CHEVRON_SVG}</span></span>`;
+  /* Native 0.10 uses `control-show cursor-pointer` whenever hovered OR
+   * collapsed. We keep the chevron always visible, so we emit
+   * `control-show` unconditionally — matches native when the mouse is
+   * over the header. */
+  return `<span class="control-show cursor-pointer"><span class="${cls}">${CHEVRON_SVG}</span></span>`;
 }
 
 function sectionHeader(count: number): string {
   const chevron = arrowHtml(state.sectionCollapsed);
-  /* Matches native view-head (views.cljs:1955-2003): .ls-view-head wrapper
-   * with a `text-sm px-0 py-0 h-6` title (shui/button) rather than an <h2>.
-   * That smaller header vertically centers the chevron the same way native
-   * Linked References does. */
+  /* Mirrors stable Logseq 0.10.x `references-cp` exactly:
+   *   (ui/foldable
+   *     [:div.flex.flex-row.flex-1.justify-between.items-center
+   *      [:h2.font-medium (t :linked-references/reference-count ...)]
+   *      [:a.filter.fade-link ...]])
+   * `ui/foldable` wraps this in `.content > .foldable-title >
+   * .flex.flex-row.items-center` with the chevron `<a.block-control>` at
+   * -30px margin-left. */
   return `
-    <div class="ls-foldable-title content">
+    <div class="content">
       <div class="flex-1 flex-row foldable-title">
-        <div class="flex flex-row items-center ls-foldable-header gap-1">
-          <a class="ls-foldable-title-control block-control opacity-50 hover:opacity-100" style="${CTRL_STYLE}" data-resurface-role="section-toggle">${chevron}</a>
-          <div class="ls-view-head flex flex-1 flex-nowrap items-center justify-between gap-1 overflow-hidden">
-            <div class="flex flex-row items-center gap-2">
-              <span class="text-sm px-0 py-0 h-6 font-medium inline-flex items-center">${count} Resurfaced</span>
-            </div>
+        <div class="flex flex-row items-center">
+          <a class="block-control opacity-50 hover:opacity-100 mr-2" style="${CTRL_STYLE}" data-resurface-role="section-toggle">${chevron}</a>
+          <div class="flex flex-row flex-1 justify-between items-center">
+            <h2 class="font-medium">${count} Resurfaced</h2>
           </div>
         </div>
       </div>
@@ -85,7 +92,7 @@ function renderCard(item: Resurfaced, refs?: BlockRefMap): string {
   const refName = (page.name ?? navName).toLowerCase();
 
   const chevron = arrowHtml(collapsed);
-  const collapsedCls = collapsed ? " is-collapsed" : "";
+  const bodyClass = collapsed ? "hidden" : "initial";
   const uuidEsc = escapeAttr(block.uuid);
   const tree: BlockEntity =
     block.tree ??
@@ -99,10 +106,10 @@ function renderCard(item: Resurfaced, refs?: BlockRefMap): string {
   return `
     <div class="my-2 references-blocks-item" data-resurface-card="${uuidEsc}">
       <div class="flex flex-col">
-        <div class="ls-foldable-title content">
+        <div class="content">
           <div class="flex-1 flex-row foldable-title">
-            <div class="flex flex-row items-center ls-foldable-header gap-1">
-              <a class="ls-foldable-title-control block-control opacity-50 hover:opacity-100" style="${CTRL_STYLE}" data-resurface-role="card-toggle" data-resurface-uuid="${uuidEsc}">${chevron}</a>
+            <div class="flex flex-row items-center">
+              <a class="block-control opacity-50 hover:opacity-100 mr-2" style="${CTRL_STYLE}" data-resurface-role="card-toggle" data-resurface-uuid="${uuidEsc}">${chevron}</a>
               <div class="flex flex-row flex-1 justify-between items-center">
                 <div>
                   <a tabindex="0" data-ref="${escapeAttr(refName)}" data-page="${escapeAttr(navName)}" draggable="true" class="page-ref">${escapeHtml(displayTitle)}</a>
@@ -112,8 +119,8 @@ function renderCard(item: Resurfaced, refs?: BlockRefMap): string {
             </div>
           </div>
         </div>
-        <div class="ls-foldable-content${collapsedCls}" aria-hidden="${collapsed}">
-          <div class="ls-foldable-content-inner">
+        <div class="${bodyClass}">
+          <div>
             <div class="blocks-container flex-1">
               ${blockTree}
             </div>
@@ -131,22 +138,23 @@ export function renderResurfaced(
   if (items.length === 0) return { html: "", count: 0 };
 
   const collapsed = state.sectionCollapsed;
-  const collapsedCls = collapsed ? " is-collapsed" : "";
+  const bodyClass = collapsed ? "hidden" : "initial";
 
+  /* Outer matches native stable `[:div.references ...] > (ui/foldable ...)`:
+   * ui/foldable emits `<div class="flex flex-col">`. We add .resurfaced-refs
+   * to scope our CSS overrides. Drop the .page-linked / .flex-1 / .flex-row
+   * classes — they were cargo-culted from an earlier experiment and were
+   * adding stray indent. */
   const html = `
-    <div class="references page-linked flex-1 flex-row resurfaced-refs" id="resurfaced-refs">
-      <div class="content pt-6">
-        <div class="flex flex-col">
-          ${sectionHeader(items.length)}
-          <div class="ls-foldable-content${collapsedCls}" aria-hidden="${collapsed}">
-            <div class="ls-foldable-content-inner">
-              <div class="references-blocks">
-                <div>
-                  <div class="content">
-                    <div class="flex flex-col references-blocks-wrap">
-                      ${items.map((item) => renderCard(item, refs)).join("")}
-                    </div>
-                  </div>
+    <div class="references resurfaced-refs" id="resurfaced-refs">
+      <div class="flex flex-col" style="margin-top: 1.5rem;">
+        ${sectionHeader(items.length)}
+        <div class="${bodyClass}">
+          <div class="references-blocks">
+            <div>
+              <div class="content">
+                <div class="flex flex-col references-blocks-wrap">
+                  ${items.map((item) => renderCard(item, refs)).join("")}
                 </div>
               </div>
             </div>

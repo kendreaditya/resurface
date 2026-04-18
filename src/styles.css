@@ -93,34 +93,10 @@
   cursor: pointer;
 }
 
-/* Chevron column is always visible + clickable in our section (native uses a
- * hover-reveal pattern driven by JS state that's awkward to mirror from a
- * plugin). Override `.block-control .control-hide { display: none }` from
- * native block.css for just our controls. */
-.resurfaced-refs .ls-foldable-title-control {
+/* Chevron column: native 0.10 toggles between `control-hide` (hidden,
+ * display:none) and `control-show cursor-pointer` (visible) via JS hover
+ * state. We render `control-show` unconditionally, so we just need the
+ * chevron to be clickable. No extra CSS needed. */
+.resurfaced-refs .block-control {
   cursor: pointer;
-}
-.resurfaced-refs .ls-foldable-title-control .control-hide {
-  display: inline-block;
-}
-
-/* Foldable animation fallback — these rules also live in native ui.css
- * (`.ls-foldable-content` CSS Grid trick). Duplicated here so the collapse
- * animates correctly even if theme CSS is scoped differently. */
-.resurfaced-refs .ls-foldable-content {
-  display: grid;
-  grid-template-rows: 1fr;
-  transition: grid-template-rows 200ms ease-in-out;
-}
-.resurfaced-refs .ls-foldable-content.is-collapsed {
-  grid-template-rows: 0fr;
-}
-.resurfaced-refs .ls-foldable-content > .ls-foldable-content-inner {
-  overflow: hidden;
-  opacity: 1;
-  transition: opacity 200ms ease-in-out;
-}
-.resurfaced-refs .ls-foldable-content.is-collapsed > .ls-foldable-content-inner {
-  opacity: 0;
-  pointer-events: none;
 }
